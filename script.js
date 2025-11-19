@@ -1,213 +1,248 @@
 
-// Sample data
-let schools = [
-    {
-        school_id: "school-001",
-        학교명: "서울고등학교",
-        주소: "서울시 강남구",
-        접근성점수: 85,
-        경사로: true,
-        엘리베이터: true,
-        화장실: false,
-        주차장: true
-    },
-    {
-        school_id: "school-002",
-        학교명: "부산중학교",
-        주소: "부산시 해운대구",
-        접근성점수: 65,
-        경사로: true,
-        엘리베이터: false,
-        화장실: true,
-        주차장: false
-    },
-    {
-        school_id: "school-003",
-        학교명: "대구초등학교",
-        주소: "대구시 수성구",
-        접근성점수: 45,
-        경사로: false,
-        엘리베이터: false,
-        화장실: false,
-        주차장: true
-    }
-];
+// Global state
+let allSchools = [];
+let currentPage = 'home';
 
-// Navigation
-function showSection(sectionId) {
-    const sections = document.querySelectorAll('.section');
-    sections.forEach(section => {
-        section.classList.remove('active');
-    });
-    document.getElementById(sectionId).classList.add('active');
-    
-    if (sectionId === 'schools') {
-        loadSchools();
-    }
-}
-
-document.querySelectorAll('.header nav a').forEach(link => {
-    link.addEventListener('click', (e) => {
-        e.preventDefault();
-        const sectionId = e.target.getAttribute('href').substring(1);
-        showSection(sectionId);
-    });
+// Initialize app
+document.addEventListener('DOMContentLoaded', async () => {
+    setupNavigation();
+    await loadSchools();
+    setupSearch();
 });
 
-// Load schools
-function loadSchools() {
-    const schoolList = document.getElementById('schoolList');
-    schoolList.innerHTML = '';
+// Navigation
+function setupNavigation() {
+    const navLinks = document.querySelectorAll('.nav-link');
     
-    schools.forEach(school => {
-        const card = createSchoolCard(school);
-        schoolList.appendChild(card);
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = link.dataset.page;
+            navigateToPage(page);
+        });
+    });
+
+    // Handle hash changes
+    window.addEventListener('hashchange', () => {
+        const hash = window.location.hash.slice(1) || 'home';
+        navigateToPage(hash);
+    });
+
+    // Initial page load
+    const hash = window.location.hash.slice(1) || 'home';
+    navigateToPage(hash);
+}
+
+function navigateToPage(page) {
+    currentPage = page;
+    
+    // Update active nav link
+    document.querySelectorAll('.nav-link').forEach(link => {
+        link.classList.remove('active');
+        if (link.dataset.page === page) {
+            link.classList.add('active');
+        }
+    });
+    
+    // Show/hide sections
+    document.querySelectorAll('.page-section').forEach(section => {
+        section.classList.remove('active');
+    });
+    
+    const targetSection = document.getElementById(`${page}-section`);
+    if (targetSection) {
+        targetSection.classList.add('active');
+    }
+    
+    // Update URL
+    window.location.hash = page;
+}
+
+// Load schools data
+async function loadSchools() {
+    const loading = document.getElementById('loading');
+    const grid = document.getElementById('schools-grid');
+    
+    if (loading) loading.style.display = 'block';
+    
+    try {
+        const response = await fetch('/api/schools');
+        const data = await response.json();
+        allSchools = data;
+        
+        displaySchools(allSchools);
+    } catch (error) {
+        console.error('Error loading schools:', error);
+        if (grid) {
+            grid.innerHTML = '<p class="no-results">데이터를 불러오는데 실패했습니다.</p>';
+        }
+    } finally {
+        if (loading) loading.style.display = 'none';
+    }
+}
+
+// Display schools
+function displaySchools(schools) {
+    const grid = document.getElementById('schools-grid');
+    const noResults = document.getElementById('no-results');
+    
+    if (!grid) return;
+    
+    if (schools.length === 0) {
+        grid.style.display = 'none';
+        if (noResults) noResults.style.display = 'block';
+        return;
+    }
+    
+    grid.style.display = 'grid';
+    if (noResults) noResults.style.display = 'none';
+    
+    grid.innerHTML = schools.slice(0, 50).map(school => createSchoolCard(school)).join('');
+    
+    // Add click handlers
+    grid.querySelectorAll('.school-card').forEach((card, index) => {
+        card.addEventListener('click', () => showSchoolDetail(schools[index]));
     });
 }
 
-// Create school card
+// Create school card HTML
 function createSchoolCard(school) {
-    const card = document.createElement('div');
-    card.className = 'school-card';
-    card.onclick = () => showSchoolDetail(school);
+    const facilities = [
+        { label: '주출입구 접근로', value: school.주출입구접근로설치여부 },
+        { label: '장애인 주차구역', value: school.장애인주차구역지정여부 },
+        { label: '출입구(문)', value: school['출입구(문)설치여부'] },
+        { label: '장애인 화장실', value: school.장애인대변기설치여부 }
+    ];
     
-    const scoreClass = school.접근성점수 >= 70 ? 'high' : school.접근성점수 >= 50 ? 'medium' : 'low';
-    
-    card.innerHTML = `
-        <h3>${school.학교명}</h3>
-        <p>${school.주소}</p>
-        <span class="score-badge ${scoreClass}">접근성 ${school.접근성점수}점</span>
-        <ul class="facility-list">
-            <li>
-                <span class="facility-icon ${school.경사로 ? 'available' : 'unavailable'}"></span>
-                경사로
-            </li>
-            <li>
-                <span class="facility-icon ${school.엘리베이터 ? 'available' : 'unavailable'}"></span>
-                엘리베이터
-            </li>
-            <li>
-                <span class="facility-icon ${school.화장실 ? 'available' : 'unavailable'}"></span>
-                장애인 화장실
-            </li>
-            <li>
-                <span class="facility-icon ${school.주차장 ? 'available' : 'unavailable'}"></span>
-                장애인 주차장
-            </li>
-        </ul>
+    return `
+        <div class="school-card">
+            <div class="school-card-header">
+                <h3 class="school-name">${school.학교명}</h3>
+                <div class="school-meta">
+                    <span class="school-badge">${school.학교급명}</span>
+                    <span class="school-badge">${school.설립구분명}</span>
+                </div>
+            </div>
+            <div class="school-facilities">
+                ${facilities.map(f => `
+                    <div class="facility-item">
+                        <div class="facility-icon ${f.value === 'Y' ? 'available' : 'unavailable'}">
+                            ${f.value === 'Y' ? '✓' : '✗'}
+                        </div>
+                        <span>${f.label}</span>
+                    </div>
+                `).join('')}
+            </div>
+        </div>
     `;
-    
-    return card;
 }
 
-// Search schools
-function searchSchools() {
-    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-    const filteredSchools = schools.filter(school => 
-        school.학교명.toLowerCase().includes(searchTerm) ||
-        school.주소.toLowerCase().includes(searchTerm)
-    );
+// Search functionality
+function setupSearch() {
+    const searchInput = document.getElementById('school-search');
     
-    const schoolList = document.getElementById('schoolList');
-    schoolList.innerHTML = '';
-    
-    filteredSchools.forEach(school => {
-        const card = createSchoolCard(school);
-        schoolList.appendChild(card);
-    });
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            const query = e.target.value.toLowerCase().trim();
+            
+            if (query === '') {
+                displaySchools(allSchools);
+            } else {
+                const filtered = allSchools.filter(school => 
+                    school.학교명.toLowerCase().includes(query) ||
+                    school.지역명?.toLowerCase().includes(query)
+                );
+                displaySchools(filtered);
+            }
+        });
+    }
 }
 
-// Show school detail
+// Search from hero section
+function searchFromHero() {
+    const heroSearch = document.getElementById('hero-search');
+    const schoolSearch = document.getElementById('school-search');
+    
+    if (heroSearch && schoolSearch) {
+        const query = heroSearch.value;
+        schoolSearch.value = query;
+        navigateToPage('schools');
+        
+        // Trigger search
+        setTimeout(() => {
+            const event = new Event('input', { bubbles: true });
+            schoolSearch.dispatchEvent(event);
+        }, 100);
+    }
+}
+
+// Show school detail modal
 function showSchoolDetail(school) {
-    const modal = document.getElementById('schoolModal');
-    const modalBody = document.getElementById('modalBody');
+    const modal = document.getElementById('school-modal');
+    const modalName = document.getElementById('modal-school-name');
+    const modalBody = document.getElementById('modal-body');
     
-    const scoreClass = school.접근성점수 >= 70 ? 'high' : school.접근성점수 >= 50 ? 'medium' : 'low';
+    if (!modal || !modalName || !modalBody) return;
     
-    modalBody.innerHTML = `
-        <h2>${school.학교명}</h2>
-        <p><strong>주소:</strong> ${school.주소}</p>
-        <p><strong>접근성 점수:</strong> <span class="score-badge ${scoreClass}">${school.접근성점수}점</span></p>
-        <h3>시설 현황</h3>
-        <ul class="facility-list">
-            <li>
-                <span class="facility-icon ${school.경사로 ? 'available' : 'unavailable'}"></span>
-                경사로: ${school.경사로 ? '설치됨' : '미설치'}
-            </li>
-            <li>
-                <span class="facility-icon ${school.엘리베이터 ? 'available' : 'unavailable'}"></span>
-                엘리베이터: ${school.엘리베이터 ? '설치됨' : '미설치'}
-            </li>
-            <li>
-                <span class="facility-icon ${school.화장실 ? 'available' : 'unavailable'}"></span>
-                장애인 화장실: ${school.화장실 ? '설치됨' : '미설치'}
-            </li>
-            <li>
-                <span class="facility-icon ${school.주차장 ? 'available' : 'unavailable'}"></span>
-                장애인 주차장: ${school.주차장 ? '설치됨' : '미설치'}
-            </li>
-        </ul>
-    `;
+    modalName.textContent = school.학교명;
     
-    modal.style.display = 'block';
+    const facilities = [
+        { label: '기준년도', value: school.기준년도 },
+        { label: '시군명', value: school.시군명 },
+        { label: '지역교육청명', value: school.지역교육청명 },
+        { label: '지역명', value: school.지역명 },
+        { label: '학교급명', value: school.학교급명 },
+        { label: '설립구분명', value: school.설립구분명 },
+        { label: '주출입구 접근로 설치', value: school.주출입구접근로설치여부 },
+        { label: '장애인 주차구역 지정', value: school.장애인주차구역지정여부 },
+        { label: '주출입구 높이차이 제거', value: school.주출입구높이차이제거여부 },
+        { label: '출입구(문) 설치', value: school['출입구(문)설치여부'] },
+        { label: '복도 설치', value: school.복도설치여부 },
+        { label: '계단/승강기/경사로', value: school['계단/승강기/경사로/휠체어리프트설치여부'] },
+        { label: '장애인 대변기 설치', value: school.장애인대변기설치여부 },
+        { label: '장애인 소변기 설치', value: school.장애인소변기설치여부 },
+        { label: '점자블록 설치', value: school.점자블록설치여부 },
+        { label: '유도 및 안내설비', value: school.유도및안내설비설치여부 },
+        { label: '경보 및 피난설비', value: school.경보및피난설비설치여부 }
+    ];
+    
+    modalBody.innerHTML = facilities.map(f => {
+        let statusHtml = '';
+        if (f.value === 'Y' || f.value === 'N') {
+            statusHtml = `<span class="status-badge ${f.value === 'Y' ? 'yes' : 'no'}">
+                ${f.value === 'Y' ? '설치됨' : '미설치'}
+            </span>`;
+        } else {
+            statusHtml = `<span>${f.value || '-'}</span>`;
+        }
+        
+        return `
+            <div class="facility-detail">
+                <span class="facility-label">${f.label}</span>
+                <div class="facility-status">${statusHtml}</div>
+            </div>
+        `;
+    }).join('');
+    
+    modal.classList.add('active');
 }
 
 // Close modal
 function closeModal() {
-    document.getElementById('schoolModal').style.display = 'none';
-}
-
-window.onclick = function(event) {
-    const modal = document.getElementById('schoolModal');
-    if (event.target == modal) {
-        modal.style.display = 'none';
+    const modal = document.getElementById('school-modal');
+    if (modal) {
+        modal.classList.remove('active');
     }
 }
 
-// Handle report form
-document.getElementById('reportForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    
-    const formData = {
-        학교명: document.getElementById('schoolName').value,
-        시설유형: document.getElementById('facilityType').value,
-        내용: document.getElementById('reportContent').value
-    };
-    
-    const messageDiv = document.getElementById('formMessage');
-    
-    try {
-        // Simulate API call
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        
-        messageDiv.className = 'message success';
-        messageDiv.textContent = '제보가 성공적으로 등록되었습니다!';
-        
-        document.getElementById('reportForm').reset();
-        
-        setTimeout(() => {
-            messageDiv.style.display = 'none';
-        }, 3000);
-    } catch (error) {
-        messageDiv.className = 'message error';
-        messageDiv.textContent = '제보 등록에 실패했습니다. 다시 시도해주세요.';
+// Close modal when clicking outside
+document.addEventListener('click', (e) => {
+    const modal = document.getElementById('school-modal');
+    if (e.target === modal) {
+        closeModal();
     }
 });
 
-// Load API data (if available)
-async function loadSchoolsFromAPI() {
-    try {
-        const response = await fetch('/api/schools');
-        if (response.ok) {
-            schools = await response.json();
-            loadSchools();
-        }
-    } catch (error) {
-        console.log('Using sample data');
-    }
-}
-
-// Initialize
-document.addEventListener('DOMContentLoaded', () => {
-    loadSchoolsFromAPI();
-});
+// Export functions to global scope
+window.searchFromHero = searchFromHero;
+window.closeModal = closeModal;
